@@ -1,0 +1,6 @@
+# Manim render env (symlinked, ~GB) and intermediate render tree
+.manim-env
+media/
+__pycache__/
+*.pyc
+/tmp/
