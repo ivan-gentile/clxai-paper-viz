@@ -18,7 +18,7 @@ is schematic; this is the quantitative core.
 
 from manim import (
     Scene, Text, VGroup, Rectangle, RoundedRectangle, Line, Triangle,
-    SurroundingRectangle, FadeIn, GrowFromEdge, Write, Indicate,
+    SurroundingRectangle, FadeIn, GrowFromEdge, Create, Write, Indicate,
     WHITE, BOLD, UP, DOWN, LEFT, RIGHT, DEGREES, there_and_back,
 )
 
@@ -39,8 +39,14 @@ class TheScoreboard(Scene):
             color="#aeb6c2",
         ).scale(0.42)
         subtitle.next_to(title, DOWN, buff=0.12)
+        scalenote = Text(
+            "mean ± std over 5 runs · each metric on its own axis (note the tick labels)",
+            color="#6f7785",
+        ).scale(0.30)
+        scalenote.next_to(subtitle, DOWN, buff=0.08)
         self.play(Write(title), run_time=0.9)
         self.play(FadeIn(subtitle, shift=DOWN * 0.1), run_time=0.6)
+        self.play(FadeIn(scalenote), run_time=0.4)
 
         # ---------------------------------------------------------------
         # Chart geometry
@@ -49,10 +55,10 @@ class TheScoreboard(Scene):
         metric_names = ["Faithfulness", "Continuity", "Complexity"]
 
         baseline_y = -2.35           # y of bar bases / x-axis
-        max_bar_h = 2.05             # tallest normalized bar height
+        max_bar_h = 2.05             # plot height for each per-group axis
         group_centers_x = [-4.2, 0.0, 4.2]
-        bar_w = 0.62
-        gap = 0.10                   # gap between bars in a group
+        bar_w = 0.58
+        gap = 0.12                   # gap between bars in a group
 
         # baseline axis line
         axis = Line(
@@ -61,31 +67,40 @@ class TheScoreboard(Scene):
         )
         self.play(FadeIn(axis), run_time=0.4)
 
-        # Per-metric normalization: scale heights so they read clearly within a
-        # group, while the printed number remains the true published value.
-        # We map each group's values to [min_h_frac, 1.0] * max_bar_h so the
-        # spread is visible regardless of the metric's natural scale.
-        def normalized_heights(values):
-            vmin, vmax = min(values), max(values)
-            span = (vmax - vmin) if (vmax - vmin) > 1e-9 else 1.0
-            out = []
-            for v in values:
-                frac = (v - vmin) / span          # 0..1
-                # keep all bars clearly visible: floor at 0.42 of max height
-                h = (0.42 + 0.58 * frac) * max_bar_h
-                out.append(h)
-            return out
+        # ---- Honest per-group scaling --------------------------------------
+        # The three metrics have very different natural ranges (PF~0.3, SSIM~0.57,
+        # entropy~6.7), so each group gets its OWN y-axis. To keep bars TRUE TO
+        # SCALE we map a per-group [floor, ceil] window linearly to [0, max_bar_h].
+        # The window is chosen around the data (incl. error bars) with a small pad,
+        # and BOTH endpoints are printed as tick labels next to each group, so the
+        # reader can see the axis does not start at zero -- the heights then encode
+        # real proportional differences rather than a min-max stretch.
+        def group_window(vals, stds):
+            lo = min(v - s for v, s in zip(vals, stds))
+            hi = max(v + s for v, s in zip(vals, stds))
+            span = max(hi - lo, 1e-6)
+            pad = 0.35 * span
+            floor = lo - pad
+            ceil = hi + pad
+            return floor, ceil
+
+        def to_h(v, floor, ceil):
+            return (v - floor) / (ceil - floor) * max_bar_h
 
         bar_groups = {}     # metric -> list of Rectangle (CE, SCL, TL order)
         value_labels = {}   # metric -> list of Text
         obj_labels = {}     # metric -> list of Text (CE/SCL/TL under bars)
+        err_bars = {}       # metric -> list of VGroup (error-bar whisker+caps)
         metric_titles = {}
         arrow_glyphs = {}
+        axis_ticks = {}     # metric -> VGroup(floor/ceil tick labels + ticks)
 
         for gi, metric in enumerate(metric_names):
             md = METRICS[metric]
             vals = [md["CIFAR10"][o] for o in OBJECTIVES]
-            heights = normalized_heights(vals)
+            stds = [md["std_CIFAR10"][o] for o in OBJECTIVES]
+            floor, ceil = group_window(vals, stds)
+            heights = [to_h(v, floor, ceil) for v in vals]
             cx = group_centers_x[gi]
 
             # bar x-positions for the 3 objectives, centered on cx
@@ -96,6 +111,7 @@ class TheScoreboard(Scene):
             bars = []
             vlabels = []
             olabels = []
+            ebars = []
             for i, obj in enumerate(OBJECTIVES):
                 h = heights[i]
                 bar = Rectangle(
@@ -107,10 +123,30 @@ class TheScoreboard(Scene):
                 bar.move_to([xs[i], baseline_y + h / 2, 0])
                 bars.append(bar)
 
-                # true printed value on top of the bar
-                txt = f"{vals[i]:.2f}"
-                vl = Text(txt, color=WHITE, weight=BOLD).scale(0.36)
-                vl.next_to(bar, UP, buff=0.10)
+                # error bar: +/- 1 std, mapped through the same window, with caps
+                s = stds[i]
+                top_y = baseline_y + h
+                if s > 1e-9:
+                    dh = s / (ceil - floor) * max_bar_h
+                    cap = bar_w * 0.32
+                    whisker = Line([xs[i], top_y - dh, 0], [xs[i], top_y + dh, 0],
+                                   color="#e9edf3", stroke_width=2.4)
+                    cap_hi = Line([xs[i] - cap, top_y + dh, 0],
+                                  [xs[i] + cap, top_y + dh, 0],
+                                  color="#e9edf3", stroke_width=2.4)
+                    cap_lo = Line([xs[i] - cap, top_y - dh, 0],
+                                  [xs[i] + cap, top_y - dh, 0],
+                                  color="#e9edf3", stroke_width=2.4)
+                    ebars.append(VGroup(whisker, cap_hi, cap_lo))
+                    label_anchor_y = top_y + dh
+                else:
+                    ebars.append(None)
+                    label_anchor_y = top_y
+
+                # true printed value (+/- std) above the bar / error cap
+                txt = f"{vals[i]:.2f}" + (f"±{s:.2f}" if s > 1e-9 else "")
+                vl = Text(txt, color=WHITE, weight=BOLD).scale(0.30)
+                vl.move_to([xs[i], label_anchor_y + 0.22, 0])
                 vlabels.append(vl)
 
                 # objective name under the bar
@@ -121,6 +157,24 @@ class TheScoreboard(Scene):
             bar_groups[metric] = bars
             value_labels[metric] = vlabels
             obj_labels[metric] = olabels
+            err_bars[metric] = ebars
+
+            # ---- per-group y-axis with floor/ceil tick labels --------------
+            # short vertical axis just left of the group, with two ticks so the
+            # non-zero baseline is explicit and honest.
+            ax_x = x0 - bar_w / 2 - 0.30
+            yax = Line([ax_x, baseline_y, 0], [ax_x, baseline_y + max_bar_h, 0],
+                       color="#3a4150", stroke_width=1.6)
+            tick_lo = Line([ax_x - 0.07, baseline_y, 0], [ax_x, baseline_y, 0],
+                           color="#3a4150", stroke_width=1.6)
+            tick_hi = Line([ax_x - 0.07, baseline_y + max_bar_h, 0],
+                           [ax_x, baseline_y + max_bar_h, 0],
+                           color="#3a4150", stroke_width=1.6)
+            lo_lab = Text(f"{floor:.2f}", color="#6f7785").scale(0.24)
+            lo_lab.next_to(tick_lo, LEFT, buff=0.06)
+            hi_lab = Text(f"{ceil:.2f}", color="#6f7785").scale(0.24)
+            hi_lab.next_to(tick_hi, LEFT, buff=0.06)
+            axis_ticks[metric] = VGroup(yax, tick_lo, tick_hi, lo_lab, hi_lab)
 
             # metric title + unit + direction arrow, above the group
             top_y = baseline_y + max_bar_h + 1.30
@@ -154,12 +208,25 @@ class TheScoreboard(Scene):
             run_time=0.9,
         )
 
+        # draw the per-group y-axes + tick labels (makes the non-zero scale explicit)
+        self.play(
+            *[Create(axis_ticks[m]) for m in metric_names],
+            run_time=0.7,
+        )
+
         # grow all bars from the baseline together
         grow_anims = []
         for m in metric_names:
             for bar in bar_groups[m]:
                 grow_anims.append(GrowFromEdge(bar, UP))
         self.play(*grow_anims, run_time=1.3)
+
+        # error bars (+/- 1 std over 5 runs) on top of the bars
+        ebar_anims = [
+            Create(eb) for m in metric_names for eb in err_bars[m] if eb is not None
+        ]
+        if ebar_anims:
+            self.play(*ebar_anims, run_time=0.7)
 
         # objective labels under bars
         self.play(
