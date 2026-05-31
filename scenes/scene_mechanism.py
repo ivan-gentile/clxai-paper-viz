@@ -74,16 +74,23 @@ class TheMechanism(Scene):
         self.play(FadeIn(subtitle, shift=DOWN * 0.15), run_time=0.7)
 
         # ---------- Stage layout ----------
-        # The dot cloud lives in a centered region; we keep everything in [-7,7]x[-4,4].
-        stage_center = np.array([0.0, -0.35, 0.0])
+        # Symmetric, horizontal layout so "pull together / push apart" reads cleanly.
+        # Everything stays inside [-7,7]x[-4,4]. Three beats:
+        #   loose (overlapping near center) -> pull (each class contracts to its center)
+        #   -> push (the two tight clusters slide apart, left vs right).
+        stage_center = np.array([0.0, -0.55, 0.0])
 
-        # Loose (CE) cluster centers: close together, overlapping-ish.
-        loose_a_center = stage_center + np.array([-1.05, 0.55, 0.0])
-        loose_b_center = stage_center + np.array([1.05, -0.55, 0.0])
+        # Loose (CE) cluster centers: close together near the middle, so they overlap.
+        loose_a_center = stage_center + np.array([-0.85, 0.0, 0.0])
+        loose_b_center = stage_center + np.array([0.85, 0.0, 0.0])
 
-        # Tight (SCL) cluster centers: pushed far apart.
-        tight_a_center = stage_center + np.array([-2.75, 0.95, 0.0])
-        tight_b_center = stage_center + np.array([2.75, -0.95, 0.0])
+        # Tight-but-still-central (after PULL): same horizontal offset, just contracted.
+        pull_a_center = loose_a_center
+        pull_b_center = loose_b_center
+
+        # Pushed-apart centers (after PUSH): far to the left / right, same height.
+        tight_a_center = stage_center + np.array([-3.2, 0.0, 0.0])
+        tight_b_center = stage_center + np.array([3.2, 0.0, 0.0])
 
         n_per_class = 11
 
@@ -95,10 +102,18 @@ class TheMechanism(Scene):
                 pts.append(center + np.array([r * np.cos(ang), r * np.sin(ang), 0.0]))
             return pts
 
-        loose_a = sample_cluster(loose_a_center, 1.15, n_per_class)
-        loose_b = sample_cluster(loose_b_center, 1.15, n_per_class)
-        tight_a = sample_cluster(tight_a_center, 0.55, n_per_class)
-        tight_b = sample_cluster(tight_b_center, 0.55, n_per_class)
+        # Loose clouds overlap in the middle (wide spread). The pulled/pushed targets
+        # reuse the SAME per-dot angular layout, just contracted around a moving center,
+        # so each dot's motion is legible (contract in place, then translate sideways).
+        unit_a = sample_cluster(np.array([0.0, 0.0, 0.0]), 1.0, n_per_class)
+        unit_b = sample_cluster(np.array([0.0, 0.0, 0.0]), 1.0, n_per_class)
+
+        loose_a = [loose_a_center + 1.35 * u for u in unit_a]
+        loose_b = [loose_b_center + 1.35 * u for u in unit_b]
+        pull_a = [pull_a_center + 0.55 * u for u in unit_a]
+        pull_b = [pull_b_center + 0.55 * u for u in unit_b]
+        tight_a = [tight_a_center + 0.55 * u for u in unit_a]
+        tight_b = [tight_b_center + 0.55 * u for u in unit_b]
 
         dots_a = VGroup(*[
             Dot(p, radius=0.085, color=CLASS_A_COLOR, fill_opacity=0.95)
@@ -120,7 +135,7 @@ class TheMechanism(Scene):
                 Text("class B", color=GREY_B, font_size=20),
             ).arrange(RIGHT, buff=0.18),
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.18)
-        legend.to_corner(LEFT + DOWN, buff=0.5).shift(UP * 0.2)
+        legend.to_corner(LEFT + DOWN, buff=0.5).shift(UP * 0.95)
 
         # ---------- Phase label (CE) ----------
         phase_label = Text(
@@ -146,13 +161,13 @@ class TheMechanism(Scene):
 
         # ---------- Transition to SCL phase label ----------
         new_phase_label = Text(
-            f"Supervised Contrastive ({OBJ_LONG['SCL']})",
+            "Supervised Contrastive Loss",
             color=OBJ_COLOR["SCL"],
             weight=BOLD,
             font_size=26,
         ).to_edge(UP, buff=0.35).shift(DOWN * 1.55)
         new_phase_note = Text(
-            "pull same class together  -  push different classes apart",
+            "same-class points pull together, different classes push apart",
             color=GREY_B,
             font_size=20,
         ).next_to(new_phase_label, DOWN, buff=0.12)
@@ -162,81 +177,76 @@ class TheMechanism(Scene):
             run_time=0.8,
         )
 
-        # ---------- PULL arrows (same class -> center) ----------
-        pull_arrows_a = VGroup()
-        for d, target in zip(dots_a, tight_a):
+        # A reusable place for the beat word: BELOW the clusters (which sit around
+        # y in [-1.7, +0.6]) and above the legend, so it never collides with the
+        # header text or the dots.
+        beat_word_pos = np.array([0.0, -2.55, 0.0])
+
+        # ============ BEAT 1: PULL (each class contracts to its own center) ============
+        # Short inward arrows from each loose dot toward its contracted position.
+        pull_arrows = VGroup()
+        for d, target in zip(list(dots_a) + list(dots_b), pull_a + pull_b):
             start = d.get_center()
             end = np.array(target)
-            if np.linalg.norm(end - start) > 0.25:
-                pull_arrows_a.add(
+            if np.linalg.norm(end - start) > 0.18:
+                pull_arrows.add(
                     Arrow(
-                        start, end, buff=0.05,
-                        stroke_width=3, max_tip_length_to_length_ratio=0.18,
-                        color=CLASS_A_COLOR,
-                    )
-                )
-        pull_arrows_b = VGroup()
-        for d, target in zip(dots_b, tight_b):
-            start = d.get_center()
-            end = np.array(target)
-            if np.linalg.norm(end - start) > 0.25:
-                pull_arrows_b.add(
-                    Arrow(
-                        start, end, buff=0.05,
-                        stroke_width=3, max_tip_length_to_length_ratio=0.18,
-                        color=CLASS_B_COLOR,
+                        start, end, buff=0.04,
+                        stroke_width=2.5, max_tip_length_to_length_ratio=0.25,
+                        color=GREY_B,
                     )
                 )
 
-        pull_word = Text("pull", color=WHITE, weight=BOLD, font_size=22)
-        pull_word.move_to(stage_center + np.array([0.0, 1.95, 0.0]))
+        pull_word = Text("PULL  together", color=CLASS_A_COLOR, weight=BOLD, font_size=24)
+        pull_word.move_to(beat_word_pos)
 
         self.play(
-            FadeIn(pull_word, scale=0.6),
-            *[GrowArrow(a) for a in pull_arrows_a],
-            *[GrowArrow(a) for a in pull_arrows_b],
-            run_time=1.1,
+            FadeIn(pull_word, scale=0.7),
+            *[GrowArrow(a) for a in pull_arrows],
+            run_time=1.0,
         )
-
-        # Move dots to tight clusters.
-        move_anims = []
-        for d, target in zip(dots_a, tight_a):
-            move_anims.append(d.animate.move_to(target))
-        for d, target in zip(dots_b, tight_b):
-            move_anims.append(d.animate.move_to(target))
+        # Dots contract in place (centers stay put), so PULL reads as tightening.
         self.play(
-            *move_anims,
-            FadeOut(pull_arrows_a),
-            FadeOut(pull_arrows_b),
-            FadeOut(pull_word),
+            *[d.animate.move_to(t) for d, t in zip(dots_a, pull_a)],
+            *[d.animate.move_to(t) for d, t in zip(dots_b, pull_b)],
+            FadeOut(pull_arrows),
+            run_time=1.2,
+            rate_func=rate_functions.ease_in_out_sine,
+        )
+        self.play(FadeOut(pull_word), run_time=0.4)
+
+        # ============ BEAT 2: PUSH (the two tight clusters slide apart) ============
+        a_now = dots_a.get_center()
+        b_now = dots_b.get_center()
+        # Big horizontal push arrows pointing outward from the gap between clusters.
+        gap = 0.5 * (a_now + b_now)
+        push_a = Arrow(
+            gap + LEFT * 0.35, gap + LEFT * 2.0, buff=0.0,
+            stroke_width=7, max_tip_length_to_length_ratio=0.3, color=WHITE,
+        )
+        push_b = Arrow(
+            gap + RIGHT * 0.35, gap + RIGHT * 2.0, buff=0.0,
+            stroke_width=7, max_tip_length_to_length_ratio=0.3, color=WHITE,
+        )
+        push_word = Text("PUSH  apart", color=WHITE, weight=BOLD, font_size=24)
+        push_word.move_to(beat_word_pos)
+
+        self.play(
+            FadeIn(push_word, scale=0.7),
+            GrowArrow(push_a),
+            GrowArrow(push_b),
+            run_time=0.8,
+        )
+        # The clusters actually translate outward, following the push arrows.
+        self.play(
+            *[d.animate.move_to(t) for d, t in zip(dots_a, tight_a)],
+            *[d.animate.move_to(t) for d, t in zip(dots_b, tight_b)],
+            push_a.animate.shift(LEFT * 1.3),
+            push_b.animate.shift(RIGHT * 1.3),
             run_time=1.3,
             rate_func=rate_functions.ease_in_out_sine,
         )
-
-        # ---------- PUSH arrows (clusters apart) ----------
-        a_now = dots_a.get_center()
-        b_now = dots_b.get_center()
-        sep_dir = (a_now - b_now)
-        sep_dir = sep_dir / (np.linalg.norm(sep_dir) + 1e-9)
-
-        push_a = Arrow(
-            a_now, a_now + sep_dir * 1.0, buff=0.1,
-            stroke_width=6, color=WHITE,
-        )
-        push_b = Arrow(
-            b_now, b_now - sep_dir * 1.0, buff=0.1,
-            stroke_width=6, color=WHITE,
-        )
-        push_word = Text("push", color=WHITE, weight=BOLD, font_size=22)
-        push_word.move_to(stage_center + np.array([0.0, 1.95, 0.0]))
-
-        self.play(
-            FadeIn(push_word, scale=0.6),
-            GrowArrow(push_a),
-            GrowArrow(push_b),
-            run_time=0.9,
-        )
-        self.play(FadeOut(push_a), FadeOut(push_b), FadeOut(push_word), run_time=0.5)
+        self.play(FadeOut(push_a), FadeOut(push_b), FadeOut(push_word), run_time=0.4)
 
         # ---------- Highlight the well-clustered geometry ----------
         ring_a = Circle(radius=0.95, color=CLASS_A_COLOR, stroke_width=2.5)
@@ -246,13 +256,12 @@ class TheMechanism(Scene):
         self.play(Create(ring_a), Create(ring_b), run_time=0.8)
 
         # ---------- Linear probe (f_head) ----------
-        # A thin separating line between the two clusters -> the f_head that makes
-        # Grad-CAM possible for contrastive models.
+        # A thin vertical separating line between the two (now horizontal) clusters ->
+        # the f_head that makes Grad-CAM possible for contrastive models.
         mid = 0.5 * (dots_a.get_center() + dots_b.get_center())
-        perp = np.array([-sep_dir[1], sep_dir[0], 0.0])
         probe = Line(
-            mid + perp * 2.2,
-            mid - perp * 2.2,
+            mid + UP * 1.7,
+            mid + DOWN * 1.7,
             color=PROBE_COLOR,
             stroke_width=3.5,
         )
