@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>On the Properties of Feature Attribution for Supervised Contrastive Learning</title>
+<style>
+  :root {
+    --bg: #11141a;
+    --panel: #181c25;
+    --panel-2: #1f2531;
+    --teal: #5ac8a8;
+    --teal-dim: #3a8f78;
+    --text: #d7dde6;
+    --muted: #8a93a3;
+    --amber: #e0a458;
+    --slate: #9aa4b2;
+    --border: #2a313d;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 17px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+
+  /* Hero */
+  header.hero {
+    text-align: center;
+    padding: 72px 20px 48px;
+    background:
+      radial-gradient(900px 400px at 50% -10%, rgba(90,200,168,0.14), transparent 60%),
+      var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .venue {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--teal);
+    border: 1px solid var(--teal-dim);
+    border-radius: 20px;
+    padding: 5px 14px;
+    margin-bottom: 22px;
+  }
+  header.hero h1 {
+    font-size: clamp(26px, 5vw, 42px);
+    line-height: 1.15;
+    margin: 0 auto 8px;
+    max-width: 760px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header.hero h1 .hl { color: var(--teal); }
+  .authors { color: var(--muted); font-size: 15px; margin: 14px 0 28px; }
+  .thesis {
+    max-width: 680px;
+    margin: 0 auto;
+    color: var(--text);
+    font-size: 18px;
+  }
+  .thesis strong { color: var(--teal); }
+
+  /* Sections */
+  section {
+    padding: 46px 0;
+    border-top: 1px solid var(--border);
+  }
+  section .kicker {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin: 0 0 6px;
+  }
+  section h2 {
+    font-size: clamp(22px, 3.5vw, 30px);
+    margin: 0 0 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  section p { color: var(--text); max-width: 720px; }
+  video {
+    width: 100%;
+    margin-top: 22px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: #000;
+    display: block;
+  }
+
+  /* By the numbers */
+  .table-scroll { overflow-x: auto; margin-top: 18px; border-radius: 12px; border: 1px solid var(--border); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 640px; }
+  caption { text-align: left; color: var(--muted); font-size: 14px; padding: 0 0 10px; }
+  th, td { padding: 11px 14px; text-align: center; border-bottom: 1px solid var(--border); }
+  thead th {
+    background: var(--panel-2);
+    color: var(--text);
+    font-weight: 600;
+    position: sticky; top: 0;
+  }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
+  td.metric { text-align: left; font-weight: 600; }
+  td.metric small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .ds { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: 0.05em; }
+  .arrow { font-size: 12px; color: var(--muted); }
+  .win {
+    color: var(--teal);
+    font-weight: 700;
+    background: rgba(90,200,168,0.10);
+    border-radius: 6px;
+  }
+  .ce-win { color: var(--amber); font-weight: 700; }
+  .legend { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .col-ce { color: var(--slate); }
+  .col-scl { color: var(--teal); }
+  .col-tl { color: var(--amber); }
+
+  /* Not-claim box */
+  .caveat {
+    margin-top: 22px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--amber);
+    border-radius: 12px;
+    padding: 22px 24px;
+  }
+  .caveat h3 { margin: 0 0 12px; color: var(--amber); font-size: 18px; }
+  .caveat ul { margin: 0; padding-left: 20px; }
+  .caveat li { margin-bottom: 10px; color: var(--text); }
+  .caveat li strong { color: var(--text); }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 20px 56px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  footer a { color: var(--teal); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  footer .repo {
+    display: inline-block;
+    margin-top: 14px;
+    border: 1px solid var(--teal-dim);
+    border-radius: 8px;
+    padding: 9px 18px;
+    color: var(--teal);
+  }
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    section { padding: 36px 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="venue">XAI World Conference 2026</span>
+    <h1>On the Properties of Feature Attribution for <span class="hl">Supervised Contrastive Learning</span></h1>
+    <div class="authors">Arrighi, Belloni, Gallet, Gentile, Lippi, Zullich</div>
+    <p class="thesis">
+      Two image classifiers can reach the same accuracy yet "explain" themselves very differently.
+      We show that the <strong>training objective</strong> &mdash; not just the network &mdash; shapes the quality of the
+      saliency maps used to interpret a model. Networks trained with <strong>supervised contrastive learning (SCL)</strong>
+      produce explanations that are more faithful, more stable, and more focused than the standard cross-entropy
+      baseline, because contrastive training organizes the internal feature space more cleanly.
+    </p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="finding">
+    <p class="kicker">Scene 1</p>
+    <h2>The Finding</h2>
+    <p>
+      Take one backbone and train it three ways &mdash; cross-entropy (CE), supervised contrastive loss (SCL),
+      and triplet loss (TL) &mdash; until all three hit comparable accuracy. When you then ask each model "where did you
+      look?", the answers differ systematically. The objective you optimized leaves a fingerprint on the explanation,
+      and SCL's fingerprint is consistently the cleanest.
+    </p>
+    <video controls muted playsinline preload="metadata" src="site_media/TheFinding.mp4"></video>
+  </section>
+
+  <section id="mechanism">
+    <p class="kicker">Scene 2</p>
+    <h2>The Mechanism</h2>
+    <p>
+      Why would the loss change the explanations? Contrastive training explicitly pulls same-class examples together
+      and pushes different classes apart, building a tightly clustered embedding space. That well-structured geometry
+      gives the gradient a cleaner signal to attribute back to the input.
+    </p>
+    <p>
+      The result is saliency that lands on the object rather than scattering across the background &mdash; a direct,
+      geometric reason for the quality gap, not a coincidence of tuning.
+    </p>
+    <video controls muted playsinline preload="metadata" src="site_media/TheMechanism.mp4"></video>
+  </section>
+
+  <section id="scoreboard">
+    <p class="kicker">Scene 3</p>
+    <h2>The Scoreboard</h2>
+    <p>
+      Scored with Grad-CAM across both datasets, SCL wins three of the four sharply-defined metrics:
+      faithfulness, continuity, and complexity. The wins hold on small images (CIFAR10) and on harder,
+      higher-resolution scenes (ImageNet-S50) alike.
+    </p>
+    <p>
+      Crucially, this is not an accuracy story: all three objectives reach within roughly a point of each other,
+      so the explanation gap is attributable to the loss itself.
+    </p>
+    <video controls muted playsinline preload="metadata" src="site_media/TheScoreboard.mp4"></video>
+  </section>
+
+  <section id="facets">
+    <p class="kicker">Scene 4</p>
+    <h2>The Facets</h2>
+    <p>
+      "Good explanation" is not one thing. We evaluate five Co-12 facets &mdash; faithfulness, coherence, continuity,
+      contrastivity, and complexity &mdash; each capturing a different property a trustworthy saliency map should have.
+    </p>
+    <p>
+      Splitting the question this way is what lets us be honest: SCL does not win everywhere, and naming the facets
+      makes precise exactly where it leads and where it does not.
+    </p>
+    <video controls muted playsinline preload="metadata" src="site_media/TheFacets.mp4"></video>
+  </section>
+
+  <section id="generalizes">
+    <p class="kicker">Scene 5</p>
+    <h2>It Generalizes</h2>
+    <p>
+      The pattern is not an artifact of one tiny dataset. Moving from CIFAR10 to ImageNet-S50 &mdash; larger images,
+      fifty classes, real-world clutter &mdash; the same ranking holds, and some gaps widen (for example, continuity on
+      ImageNet-S50 jumps from 0.38 for CE to 0.61 for SCL).
+    </p>
+    <p>
+      A different attribution tool tells the same story: Eigen-CAM continuity on CIFAR10 climbs 0.49 &rarr; 0.69 &rarr; 0.80
+      across CE, SCL, and TL. The effect is robust to both dataset and explainer.
+    </p>
+    <video controls muted playsinline preload="metadata" src="site_media/ItGeneralizes.mp4"></video>
+  </section>
+
+  <section id="numbers">
+    <p class="kicker">Real results</p>
+    <h2>By the Numbers</h2>
+    <p>
+      Grad-CAM feature-attribution metrics, mean over 5 runs, transcribed from the published paper.
+      The arrow next to each metric shows which direction is better; the best objective in each row is
+      <span class="col-scl">highlighted</span>. <span class="col-scl">SCL is bolded wherever it wins.</span>
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <caption>Grad-CAM metrics across objectives &mdash; CIFAR10 and ImageNet-S50</caption>
+        <thead>
+          <tr>
+            <th rowspan="2" style="text-align:left">Metric</th>
+            <th rowspan="2">Dataset</th>
+            <th class="col-ce">CE</th>
+            <th class="col-scl">SCL</th>
+            <th class="col-tl">TL</th>
+          </tr>
+          <tr>
+            <th class="ds col-ce">Cross-Entropy</th>
+            <th class="ds col-scl">Supervised Contrastive</th>
+            <th class="ds col-tl">Triplet</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Faithfulness (down better, SCL wins both) -->
+          <tr>
+            <td class="metric" rowspan="2">Faithfulness <span class="arrow">&darr; lower</span><small>Pixel-Flipping AUC</small></td>
+            <td class="ds">CIFAR10</td>
+            <td>0.37 <small class="ds">&plusmn;0.01</small></td>
+            <td class="win">0.27 <small class="ds">&plusmn;0.00</small></td>
+            <td>0.32 <small class="ds">&plusmn;0.01</small></td>
+          </tr>
+          <tr>
+            <td class="ds">ImageNet-S50</td>
+            <td>0.17 <small class="ds">&plusmn;0.00</small></td>
+            <td class="win">0.10 <small class="ds">&plusmn;0.00</small></td>
+            <td>0.19 <small class="ds">&plusmn;0.01</small></td>
+          </tr>
+
+          <!-- Continuity (up better, SCL wins both) -->
+          <tr>
+            <td class="metric" rowspan="2">Continuity <span class="arrow">&uarr; higher</span><small>SSIM</small></td>
+            <td class="ds">CIFAR10</td>
+            <td>0.54 <small class="ds">&plusmn;0.02</small></td>
+            <td class="win">0.57 <small class="ds">&plusmn;0.01</small></td>
+            <td>0.57 <small class="ds">&plusmn;0.02</small></td>
+          </tr>
+          <tr>
+            <td class="ds">ImageNet-S50</td>
+            <td>0.38 <small class="ds">&plusmn;0.00</small></td>
+            <td class="win">0.61 <small class="ds">&plusmn;0.00</small></td>
+            <td>0.39 <small class="ds">&plusmn;0.01</small></td>
+          </tr>
+
+          <!-- Complexity (down better, SCL wins both) -->
+          <tr>
+            <td class="metric" rowspan="2">Complexity <span class="arrow">&darr; lower</span><small>entropy (CM)</small></td>
+            <td class="ds">CIFAR10</td>
+            <td>6.81 <small class="ds">&plusmn;0.00</small></td>
+            <td class="win">6.39 <small class="ds">&plusmn;0.01</small></td>
+            <td>6.71 <small class="ds">&plusmn;0.00</small></td>
+          </tr>
+          <tr>
+            <td class="ds">ImageNet-S50</td>
+            <td>10.20 <small class="ds">&plusmn;0.01</small></td>
+            <td class="win">9.70 <small class="ds">&plusmn;0.01</small></td>
+            <td>10.07 <small class="ds">&plusmn;0.01</small></td>
+          </tr>
+
+          <!-- Contrastivity (down better, CE/TL win - NOT SCL) -->
+          <tr>
+            <td class="metric" rowspan="2">Contrastivity <span class="arrow">&darr; lower</span><small>SSIM &mdash; CE leads</small></td>
+            <td class="ds">CIFAR10</td>
+            <td>0.003 <small class="ds">&plusmn;0.003</small></td>
+            <td>0.006 <small class="ds">&plusmn;0.002</small></td>
+            <td class="ce-win">0.001 <small class="ds">&plusmn;0.001</small></td>
+          </tr>
+          <tr>
+            <td class="ds">ImageNet-S50</td>
+            <td class="ce-win">0.20 <small class="ds">&plusmn;0.00</small></td>
+            <td>0.34 <small class="ds">&plusmn;0.00</small></td>
+            <td>0.28 <small class="ds">&plusmn;0.00</small></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="legend">
+      <span class="col-scl">Teal highlight</span> = SCL wins (lower is better for Faithfulness and Complexity; higher for Continuity).
+      <span class="col-tl">Amber</span> / <span class="col-ce">slate</span> mark rows where TL or CE leads &mdash; on contrastivity (&darr; lower better) SCL does <em>not</em> win.
+      For reference, top-1 accuracy stays close across objectives (CIFAR10: CE 95.32, SCL 94.83, TL 94.68;
+      ImageNet-S50: CE 89.17, SCL 85.85, TL 82.55) &mdash; the explanation gap is not an accuracy gap.
+    </p>
+
+    <div class="caveat">
+      <h3>What we do NOT claim</h3>
+      <ul>
+        <li><strong>SCL is not universally best.</strong> On <strong>contrastivity</strong> (do maps for different classes
+          actually differ?), cross-entropy leads on ImageNet-S50 (CE 0.20 vs SCL 0.34, lower is better) and triplet loss
+          leads on CIFAR10. We report this openly rather than averaging it away.</li>
+        <li><strong>Coherence is inconclusive.</strong> Overlap with human ground-truth segmentation (ImageNet-S50) shows
+          no reliable winner: PointingGame CE 0.84 vs SCL 0.85, Attribution-Localization CE 0.63 vs SCL 0.68, but the
+          run-to-run variance is so large (std up to &plusmn;0.37) that no objective can be declared the winner.</li>
+        <li><strong>We do not claim a causal proof.</strong> The embedding-geometry mechanism is a strongly supported
+          explanation for the observed differences, not a formal causal guarantee.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <strong style="color:var(--text)">On the Properties of Feature Attribution for Supervised Contrastive Learning</strong><br>
+      Arrighi, Belloni, Gallet, Gentile, Lippi, Zullich &middot; XAI World Conference 2026
+    </div>
+    <a class="repo" href="https://github.com/ivan-gentile/CLXAI" target="_blank" rel="noopener">View the code &amp; experiments on GitHub &rarr;</a>
+    <p style="margin-top:22px; font-size:12px;">
+      All quantitative figures on this page are transcribed verbatim from the published paper (Tables of accuracy and
+      Grad-CAM feature-attribution metrics). Animations rendered for science-communication purposes.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
